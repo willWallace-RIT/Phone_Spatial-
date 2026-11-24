@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Camera Face-Origin + IMU Telemetry 3D Spatial Audio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+    }
+    video.mirrored {
+      transform: scaleX(-1);
+    }
+    input[type="range"] {
+      accent-color: #38bdf8;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-900 text-slate-50 antialiased selection:bg-sky-400 selection:text-slate-900">
+  <!-- Main Responsive Container -->
+  <div class="max-w-4xl mx-auto px-4 py-6 sm:py-8 space-y-5">
+    
+    <!-- Header Section -->
+    <header class="space-y-1.5">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-50">
+          Camera Face-Origin + IMU Telemetry 3D Audio
+        </h1>
+        <span id="modeBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-950 border border-slate-700 text-slate-300">
+          <span id="modeDot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+          <span id="modeText">Idle / Manual Sim</span>
+        </span>
+      </div>
+      <p class="text-sm text-slate-400 leading-relaxed">
+        Locks your head's 3D origin via the front camera when visible, then propagates phone movement via IMU telemetry—or test interactively on desktop with the simulation sliders.
+      </p>
+    </header>
+
+    <!-- Transport & Audio Controls Card -->
+    <section class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
+      <div class="flex flex-wrap items-center gap-2.5">
+        <button id="startSensorsBtn" type="button" class="px-4 py-2.5 rounded-xl bg-sky-400 hover:bg-sky-300 active:scale-[0.99] text-slate-950 font-semibold text-sm transition cursor-pointer">
+          1. Start Camera + Telemetry
+        </button>
+        <button id="playBtn" type="button" class="px-4 py-2.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 active:scale-[0.99] text-slate-950 font-semibold text-sm transition cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed">
+          2. Play Spatial Audio
+        </button>
+        <button id="quickTestBtn" type="button" class="px-4 py-2.5 rounded-xl bg-indigo-400 hover:bg-indigo-300 active:scale-[0.99] text-slate-950 font-semibold text-sm transition cursor-pointer">
+          Quick Test / Synth
+        </button>
+        <button id="stopBtn" type="button" disabled class="px-4 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 active:scale-[0.99] text-slate-100 font-semibold text-sm transition cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed">
+          Stop
+        </button>
+        <button id="recenterBtn" type="button" class="px-4 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 active:scale-[0.99] text-slate-100 font-semibold text-sm transition cursor-pointer">
+          Recenter Yaw
+        </button>
+      </div>
+
+      <!-- Diagnostics & Error Status Banner (Replaces silent failures and alert) -->
+      <div id="statusBanner" role="status" aria-live="polite" class="hidden text-xs sm:text-sm px-3.5 py-2.5 rounded-xl bg-slate-950/95 border border-slate-700 text-amber-300 font-mono break-words"></div>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Audio Input Source</span>
+          <div class="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800" role="group" aria-label="Audio Source Selector">
+            <button id="srcSynthBtn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-400 text-slate-950 transition cursor-pointer">
+              Synth Loop
+            </button>
+            <button id="srcFileBtn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white transition cursor-pointer">
+              Audio File
+            </button>
+            <button id="srcLineInBtn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white transition cursor-pointer">
+              Mic / Line-In
+            </button>
+          </div>
+        </div>
+
+        <!-- Mode Panel: Synth Loop -->
+        <div id="panelSynth" class="text-xs text-slate-400 flex items-center justify-between">
+          <span>Warm Fmaj7 → Cmaj7 dual-oscillator arpeggiated pad routed through 3D HRTF.</span>
+          <span class="font-mono text-[11px] text-emerald-400">Ready</span>
+        </div>
+
+        <!-- Mode Panel: Audio File Upload -->
+        <div id="panelFile" class="hidden space-y-2">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <input id="audioFile" type="file" accept="audio/*" class="block w-full text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-slate-100 hover:file:bg-slate-600 cursor-pointer" />
+            <span id="fileLabel" class="text-[11px] text-slate-400 shrink-0">No file selected</span>
+          </div>
+        </div>
+
+        <!-- Mode Panel: Live Microphone / Line-In -->
+        <div id="panelLineIn" class="hidden space-y-2.5">
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+            <div class="sm:col-span-6 flex items-center gap-2">
+              <select id="audioInputSelect" aria-label="Audio Input Device" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-400">
+                <option value="">Default Audio Input (Mic / TRRS / USB)</option>
+              </select>
+              <button id="refreshDevicesBtn" type="button" title="Refresh Audio Input Devices" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 shrink-0 cursor-pointer">
+                Refresh
+              </button>
+            </div>
+            <div class="sm:col-span-6 flex items-center gap-2.5">
+              <span class="text-[11px] text-slate-400 shrink-0">Input Level</span>
+              <div class="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                <div id="inputLevelBar" class="h-full w-0 bg-gradient-to-r from-emerald-400 via-sky-400 to-rose-400 transition-[width] duration-75"></div>
+              </div>
+              <span id="inputDbLabel" class="font-mono text-[11px] text-slate-400 w-12 text-right">-∞ dB</span>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-400">
+            Hi-Fi Line-In Mode: <span class="text-slate-300">echoCancellation</span>, <span class="text-slate-300">noiseSuppression</span>, and <span class="text-slate-300">autoGainControl</span> disabled to preserve stereo/music dynamics. Use headphones to prevent feedback.
+          </p>
+        </div>
+      </div>
+
+      <!-- Desktop Simulation Sliders -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+        <!-- Simulated / Manual Distance Slider -->
+        <div class="bg-slate-900/80 border border-slate-700/70 rounded-xl p-3.5 flex flex-col justify-between">
+          <div class="flex items-center justify-between text-xs mb-2">
+            <label for="simDistSlider" class="font-medium text-slate-300">Simulated / Offset Distance</label>
+            <span id="simDistVal" class="font-mono font-semibold text-sky-400">0.80 m</span>
+          </div>
+          <input id="simDistSlider" type="range" min="0.25" max="3.5" step="0.05" value="0.80" class="w-full cursor-pointer" />
+          <p class="mt-2 text-[11px] text-slate-400">Adjusts virtual phone distance when camera isn't locked.</p>
+        </div>
+
+        <!-- Simulated / Manual Azimuth Slider -->
+        <div class="bg-slate-900/80 border border-slate-700/70 rounded-xl p-3.5 flex flex-col justify-between">
+          <div class="flex items-center justify-between text-xs mb-2">
+            <label for="simAzSlider" class="font-medium text-slate-300">Simulated / Manual Azimuth</label>
+            <span id="simAzVal" class="font-mono font-semibold text-sky-400">0°</span>
+          </div>
+          <input id="simAzSlider" type="range" min="-180" max="180" step="1" value="0" class="w-full cursor-pointer" />
+          <p class="mt-2 text-[11px] text-slate-400">Orbit the phone source around your headphones (-180° to +180°).</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Live Viewfinder + Top-Down 2D Spatial Radar Card -->
+    <section class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        
+        <!-- Camera Viewfinder + Face Bounding Box Overlay -->
+        <div class="relative bg-slate-950 border border-slate-700 rounded-xl overflow-hidden h-64">
+          <video id="camVideo" playsinline muted class="mirrored absolute inset-0 w-full h-full object-cover opacity-80"></video>
+          <canvas id="camOverlay" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
+          <div id="camPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center p-4 text-center pointer-events-none">
+            <div class="w-10 h-10 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center mb-2 text-sky-400">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <p class="text-xs font-medium text-slate-300">Front Camera Viewfinder</p>
+            <p class="text-[11px] text-slate-400 mt-0.5 max-w-[230px]">Click "Start Camera + Telemetry" to detect face origin, or use sliders and Quick Test / Synth right away.</p>
+          </div>
+          <span class="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-md bg-slate-950/80 border border-slate-700/80 text-[11px] font-medium text-slate-300">
+            Face Origin Viewfinder
+          </span>
+        </div>
+
+        <!-- Top-Down 2D Spatial Radar -->
+        <div class="relative bg-slate-950 border border-slate-700 rounded-xl overflow-hidden h-64">
+          <canvas id="radarCanvas" class="absolute inset-0 w-full h-full"></canvas>
+          <span class="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-md bg-slate-950/80 border border-slate-700/80 text-[11px] font-medium text-slate-300">
+            Top-Down 2D Spatial Radar
+          </span>
+          <span class="absolute bottom-2.5 right-2.5 text-[11px] text-slate-400 font-mono">
+            1 ring = 0.5m
+          </span>
+        </div>
+      </div>
+
+      <!-- Live Telemetry Readout Grid -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 font-mono text-xs">
+        <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+          <div class="text-[11px] text-slate-400 font-sans mb-0.5">Tracking Source</div>
+          <div id="tSource" class="font-semibold text-sky-400 truncate">Manual / Sim</div>
+        </div>
+        <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+          <div class="text-[11px] text-slate-400 font-sans mb-0.5">Estimated Distance</div>
+          <div id="tDist" class="font-semibold text-slate-100">0.80 m</div>
+        </div>
+        <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+          <div class="text-[11px] text-slate-400 font-sans mb-0.5">Phone Pos (X, Y, Z)</div>
+          <div id="tPos" class="font-semibold text-slate-100">0.00, 0.00, -0.80</div>
+        </div>
+        <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+          <div class="text-[11px] text-slate-400 font-sans mb-0.5">IMU Delta Yaw</div>
+          <div id="tYaw" class="font-semibold text-slate-100">0.0°</div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <script type="module">
+    // --- Sensor Fusion & Simulation State ---
+    const state = {
+      // Raw DeviceOrientation IMU telemetry
+      alpha: 0,
+      beta: 45,
+      gamma: 0,
+      hasIMU: false,
+
+      // Camera & vision status
+      cameraActive: false,
+      faceVisible: false,
+      visionStatus: "uninitialized", // "uninitialized" | "loading" | "mediapipe" | "native" | "fallback"
+
+      // Anchored 3D vector (phone relative to listener's head at [0,0,0])
+      anchorX: 0,
+      anchorY: 0,
+      anchorZ: -0.8,
+      anchorAlpha: 0,
+      anchorBeta: 45,
+
+      // Desktop / Manual fallback slider values
+      simDistance: 0.8,
+      simAzimuthDeg: 0,
+
+      // Final fused 3D phone source coordinates fed to HRTF PannerNode
+      phoneX: 0,
+      phoneY: 0,
+      phoneZ: -0.8,
+
+      // Audio playback state
+      isPlaying: false,
+      sourceMode: "synth", // "synth" | "file" | "linein"
+      selectedDeviceId: ""
+    };
+
+    // Vision & Audio handles
+    let faceLandmarker = null;
+    let nativeDetector = null;
+    let lastVideoTime = -1;
+    let visionLoopId = null;
+    let fusionLoopId = null;
+
+    let audioCtx = null;
+    let panner = null;
+    let masterGain = null;
+    let sourceNode = null;
+    let synthTimer = null;
+    let customBuffer = null;
+
+    // Live Line-In / Microphone handles
+    let lineInStream = null;
+    let lineInSourceNode = null;
+    let analyserNode = null;
+    let meterDataArray = null;
+
+    // Camera stream handle
+    let cameraStream = null;
+
+    // --- DOM References ---
+    const startSensorsBtn = document.getElementById("startSensorsBtn");
+    const playBtn = document.getElementById("playBtn");
+    const quickTestBtn = document.getElementById("quickTestBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const recenterBtn = document.getElementById("recenterBtn");
+    const statusBanner = document.getElementById("statusBanner");
+
+    const modeBadge = document.getElementById("modeBadge");
+    const modeDot = document.getElementById("modeDot");
+    const modeText = document.getElementById("modeText");
+
+    const srcSynthBtn = document.getElementById("srcSynthBtn");
+    const srcFileBtn = document.getElementById("srcFileBtn");
+    const srcLineInBtn = document.getElementById("srcLineInBtn");
+    const panelSynth = document.getElementById("panelSynth");
+    const panelFile = document.getElementById("panelFile");
+    const panelLineIn = document.getElementById("panelLineIn");
+
+    const audioFile = document.getElementById("audioFile");
+    const fileLabel = document.getElementById("fileLabel");
+    const audioInputSelect = document.getElementById("audioInputSelect");
+    const refreshDevicesBtn = document.getElementById("refreshDevicesBtn");
+    const inputLevelBar = document.getElementById("inputLevelBar");
+    const inputDbLabel = document.getElementById("inputDbLabel");
+
+    const simDistSlider = document.getElementById("simDistSlider");
+    const simDistVal = document.getElementById("simDistVal");
+    const simAzSlider = document.getElementById("simAzSlider");
+    const simAzVal = document.getElementById("simAzVal");
+
+    const video = document.getElementById("camVideo");
+    const camOverlay = document.getElementById("camOverlay");
+    const camCtx = camOverlay.getContext("2d");
+    const camPlaceholder = document.getElementById("camPlaceholder");
+    const radarCanvas = document.getElementById("radarCanvas");
+    const radarCtx = radarCanvas.getContext("2d");
+
+    const tSource = document.getElementById("tSource");
+    const tDist = document.getElementById("tDist");
+    const tPos = document.getElementById("tPos");
+    const tYaw = document.getElementById("tYaw");
+
+    // --- Diagnostics & Environment Helpers ---
+    function showStatus(msg, level = "warn") {
+      if (!msg) {
+        statusBanner.textContent = "";
+        statusBanner.className = "hidden text-xs sm:text-sm px-3.5 py-2.5 rounded-xl bg-slate-950/95 border border-slate-700 text-amber-300 font-mono break-words";
+        return;
+      }
+      const colorMap = {
+        info: "border-sky-500/50 text-sky-300",
+        warn: "border-amber-500/50 text-amber-300",
+        error: "border-rose-500/60 text-rose-300",
+        ok: "border-emerald-500/50 text-emerald-300"
+      };
+      statusBanner.className = `block text-xs sm:text-sm px-3.5 py-2.5 rounded-xl bg-slate-950/95 border font-mono break-words ${colorMap[level] || colorMap.warn}`;
+      statusBanner.textContent = msg;
+    }
+
+    function formatError(err, context = "") {
+      const name = err && err.name ? err.name : "Error";
+      const message = err && err.message ? err.message : String(err || "Unknown error");
+      const prefix = context ? `[${context}] ` : "";
+      let hint = "";
+      if (!window.isSecureContext && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
+        hint = " (Tip: Browser requires HTTPS or localhost for sensors/media.)";
+      } else if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+        hint = " (Permission denied by user, browser policy, or iframe sandbox.)";
+      } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        hint = " (No matching audio/video input device found.)";
+      } else if (name === "NotReadableError" || name === "TrackStartError") {
+        hint = " (Device is busy or locked by another app/OS audio session.)";
+      }
+      return `${prefix}${name}: ${message}${hint}`;
+    }
+
+    function withTimeout(promise, ms, label = "Operation") {
+      let timerId;
+      const timeoutPromise = new Promise((_, reject) => {
+        timerId = setTimeout(() => {
+          reject(new Error(`${label} timed out after ${ms}ms`));
+        }, ms);
+      });
+      return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timerId));
+    }
+
+    // --- 1. Non-Blocking Vision Initialization (MediaPipe -> Native FaceDetector -> IMU/Slider Fallback) ---
+    async function initFaceTracker() {
+      if (state.visionStatus === "mediapipe" || state.visionStatus === "native") {
+        return;
+      }
+      state.visionStatus = "loading";
+
+      try {
+        const visionBundle = await withTimeout(
+          import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs"),
+          4500,
+          "MediaPipe bundle import"
+        );
+        const { FilesetResolver, FaceLandmarker } = visionBundle;
+
+        const vision = await withTimeout(
+          FilesetResolver.forVisionTasks(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm"
+          ),
+          5000,
+          "MediaPipe WASM resolver"
+        );
+
+        faceLandmarker = await withTimeout(
+          FaceLandmarker.createFromOptions(vision, {
+            baseOptions: {
+              modelAssetPath:
+                "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+              delegate: "GPU"
+            },
+            runningMode: "VIDEO",
+            numFaces: 1
+          }),
+          6000,
+          "FaceLandmarker model load"
+        );
+
+        state.visionStatus = "mediapipe";
+        return;
+      } catch (mpErr) {
+        console.warn("MediaPipe unavailable, attempting native FaceDetector fallback:", mpErr);
+      }
+
+      try {
+        if ("FaceDetector" in window && typeof window.FaceDetector === "function") {
+          nativeDetector = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+          state.visionStatus = "native";
+          showStatus("MediaPipe CDN unreachable; using browser native FaceDetector + IMU/sliders.", "info");
+          return;
+        }
+      } catch (fdErr) {
+        console.warn("Native FaceDetector fallback failed:", fdErr);
+      }
+
+      state.visionStatus = "fallback";
+      showStatus("Face detector unavailable (offline/sandbox); using IMU telemetry and manual sliders.", "info");
+    }
+
+    // --- 2. Start Camera + IMU Telemetry ---
+    async function requestIMUTelemetry() {
+      try {
+        if (
+          typeof DeviceOrientationEvent !== "undefined" &&
+          typeof DeviceOrientationEvent.requestPermission === "function"
+        ) {
+          const permissionState = await DeviceOrientationEvent.requestPermission();
+          if (permissionState !== "granted") {
+            showStatus("Motion sensor permission was not granted; using manual azimuth/distance sliders.", "warn");
+            return false;
+          }
+        }
+
+        window.addEventListener(
+          "deviceorientation",
+          (e) => {
+            if (e.alpha === null && e.beta === null && e.gamma === null) return;
+            state.hasIMU = true;
+            state.alpha = typeof e.alpha === "number" ? e.alpha : state.alpha;
+            state.beta = typeof e.beta === "number" ? e.beta : state.beta;
+            state.gamma = typeof e.gamma === "number" ? e.gamma : state.gamma;
+          },
+          { passive: true }
+        );
+        return true;
+      } catch (err) {
+        showStatus(formatError(err, "IMU Telemetry"), "warn");
+        return false;
+      }
+    }
+
+    function stopCameraStream() {
+      if (visionLoopId) {
+        cancelAnimationFrame(visionLoopId);
+        visionLoopId = null;
+      }
+      if (cameraStream) {
+        try {
+          cameraStream.getTracks().forEach((track) => track.stop());
+        } catch (_) {}
+        cameraStream = null;
+      }
+      if (video.srcObject) {
+        try { video.pause(); } catch (_) {}
+        video.srcObject = null;
+      }
+      state.cameraActive = false;
+      state.faceVisible = false;
+      camPlaceholder.classList.remove("hidden");
+    }
+
+    startSensorsBtn.addEventListener("click", async () => {
+      startSensorsBtn.disabled = true;
+      const prevLabel = startSensorsBtn.textContent;
+      startSensorsBtn.textContent = "Starting Telemetry...";
+      showStatus("Initializing IMU telemetry and camera origin tracker...", "info");
+
+      await requestIMUTelemetry();
+
+      // Start vision tracker in background without blocking audio readiness
+      initFaceTracker().catch((err) => {
+        console.warn("Vision init error:", err);
+      });
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        startSensorsBtn.disabled = false;
+        startSensorsBtn.textContent = prevLabel;
+        state.cameraActive = false;
+        showStatus("Camera API unavailable in this browser/sandbox; IMU & sliders remain active.", "warn");
+        return;
+      }
+
+      try {
+        stopCameraStream();
+        const stream = await withTimeout(
+          navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+            audio: false
+          }),
+          7000,
+          "getUserMedia(video)"
+        );
+        cameraStream = stream;
+        video.srcObject = stream;
+        await video.play();
+        state.cameraActive = true;
+        camPlaceholder.classList.add("hidden");
+        startSensorsBtn.textContent = "Camera + Telemetry Active";
+        startSensorsBtn.disabled = false;
+        showStatus("Camera and telemetry active. Position your face in frame to lock 3D head origin.", "ok");
+
+        if (!visionLoopId) {
+          visionLoopId = requestAnimationFrame(detectFaceOrigin);
+        }
+      } catch (err) {
+        console.error("Camera start error:", err);
+        stopCameraStream();
+        startSensorsBtn.disabled = false;
+        startSensorsBtn.textContent = prevLabel;
+        showStatus(formatError(err, "Camera"), "warn");
+      }
+    });
+
+    recenterBtn.addEventListener("click", () => {
+      state.anchorAlpha = state.alpha;
+      state.anchorBeta = state.beta;
+      if (!state.faceVisible) {
+        const azRad = (state.simAzimuthDeg * Math.PI) / 180;
+        const r = state.simDistance;
+        state.anchorX = r * Math.sin(azRad);
+        state.anchorY = 0;
+        state.anchorZ = -r * Math.cos(azRad);
+      }
+      showStatus("Recentered yaw/pitch anchor to current orientation.", "info");
+    });
+
+    // --- Slider Controls ---
+    simDistSlider.addEventListener("input", () => {
+      state.simDistance = parseFloat(simDistSlider.value);
+      simDistVal.textContent = `${state.simDistance.toFixed(2)} m`;
+      if (!state.faceVisible) {
+        const azRad = (state.simAzimuthDeg * Math.PI) / 180;
+        state.anchorX = state.simDistance * Math.sin(azRad);
+        state.anchorZ = -state.simDistance * Math.cos(azRad);
+      }
+    });
+
+    simAzSlider.addEventListener("input", () => {
+      state.simAzimuthDeg = parseFloat(simAzSlider.value);
+      simAzVal.textContent = `${state.simAzimuthDeg}°`;
+      if (!state.faceVisible) {
+        const azRad = (state.simAzimuthDeg * Math.PI) / 180;
+        state.anchorX = state.simDistance * Math.sin(azRad);
+        state.anchorZ = -state.simDistance * Math.cos(azRad);
+      }
+    });
+
+    // --- 3. Process Camera Frames for Head Origin ---
+    async function detectFaceOrigin() {
+      if (!state.cameraActive) {
+        visionLoopId = null;
+        return;
+      }
+
+      try {
+        if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+          lastVideoTime = video.currentTime;
+          camCtx.clearRect(0, 0, camOverlay.width, camOverlay.height);
+
+          let box = null; // normalized { xCenter, yCenter, width, height } in [0..1]
+
+          if (faceLandmarker && state.visionStatus === "mediapipe") {
+            const result = faceLandmarker.detectForVideo(video, performance.now());
+            if (result && result.faceLandmarks && result.faceLandmarks.length > 0) {
+              const pts = result.faceLandmarks[0];
+              let minX = 1, maxX = 0, minY = 1, maxY = 0;
+              for (let i = 0; i < pts.length; i++) {
+                const p = pts[i];
+                if (p.x < minX) minX = p.x;
+                if (p.x > maxX) maxX = p.x;
+                if (p.y < minY) minY = p.y;
+                if (p.y > maxY) maxY = p.y;
+              }
+              box = {
+                xCenter: (minX + maxX) / 2,
+                yCenter: (minY + maxY) / 2,
+                width: maxX - minX,
+                height: maxY - minY
+              };
+            }
+          } else if (nativeDetector && state.visionStatus === "native" && video.videoWidth > 0 && video.videoHeight > 0) {
+            const faces = await nativeDetector.detect(video);
+            if (faces && faces.length > 0) {
+              const b = faces[0].boundingBox;
+              box = {
+                xCenter: (b.x + b.width / 2) / video.videoWidth,
+                yCenter: (b.y + b.height / 2) / video.videoHeight,
+                width: b.width / video.videoWidth,
+                height: b.height / video.videoHeight
+              };
+            }
+          }
+
+          if (box && box.width > 0.04) {
+            state.faceVisible = true;
+
+            // Pinhole depth approximation (~0.15m average head width, ~0.85 normalized focal length)
+            const focalNorm = 0.85;
+            const distMeters = Math.min(3.5, Math.max(0.25, (0.15 * focalNorm) / box.width));
+
+            const normX = (0.5 - box.xCenter) * 2;
+            const normY = (0.5 - box.yCenter) * 2;
+
+            const azAngle = normX * (Math.PI / 4);
+            const elAngle = normY * (Math.PI / 6);
+
+            state.anchorX = distMeters * Math.sin(azAngle);
+            state.anchorY = distMeters * Math.sin(elAngle);
+            state.anchorZ = -distMeters * Math.cos(azAngle);
+
+            if (state.hasIMU) {
+              state.anchorAlpha = state.alpha;
+              state.anchorBeta = state.beta;
+            }
+
+            // Draw bounding box on mirrored overlay
+            const drawX = (1 - (box.xCenter + box.width / 2)) * camOverlay.width;
+            const drawY = (box.yCenter - box.height / 2) * camOverlay.height;
+            const drawW = box.width * camOverlay.width;
+            const drawH = box.height * camOverlay.height;
+
+            camCtx.strokeStyle = "#4ade80";
+            camCtx.lineWidth = 2.5;
+            camCtx.strokeRect(drawX, drawY, drawW, drawH);
+            camCtx.fillStyle = "#4ade80";
+            camCtx.font = "12px monospace";
+            camCtx.fillText(`HEAD ORIGIN LOCKED (${distMeters.toFixed(2)}m)`, drawX, Math.max(14, drawY - 6));
+          } else {
+            state.faceVisible = false;
+          }
+        }
+      } catch (err) {
+        console.warn("Face detection frame error:", err);
+        state.faceVisible = false;
+      }
+
+      visionLoopId = requestAnimationFrame(detectFaceOrigin);
+    }
+
+    // --- 4. Fuse Camera Origin + IMU Delta / Simulation into 3D Audio Coordinates ---
+    function syncCanvasResolution(canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const targetW = Math.max(1, Math.round(rect.width * dpr));
+      const targetH = Math.max(1, Math.round(rect.height * dpr));
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+      }
+    }
+
+    function updateFusionAndRender() {
+      syncCanvasResolution(camOverlay);
+      syncCanvasResolution(radarCanvas);
+
+      const deltaYawDeg = state.hasIMU
+        ? ((state.alpha - state.anchorAlpha + 540) % 360) - 180
+        : state.simAzimuthDeg;
+      const deltaPitchDeg = state.hasIMU ? state.beta - state.anchorBeta : 0;
+
+      if (state.faceVisible) {
+        state.phoneX = state.anchorX;
+        state.phoneY = state.anchorY;
+        state.phoneZ = state.anchorZ;
+
+        modeText.textContent = "Camera Origin Lock";
+        modeDot.className = "w-2 h-2 rounded-full bg-emerald-400";
+        modeBadge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-950 border border-emerald-500/60 text-emerald-300";
+        tSource.textContent = state.hasIMU ? "Camera + IMU" : "Camera Origin";
+      } else if (state.hasIMU) {
+        const yawRad = (-deltaYawDeg * Math.PI) / 180;
+        const cosY = Math.cos(yawRad);
+        const sinY = Math.sin(yawRad);
+
+        state.phoneX = state.anchorX * cosY - state.anchorZ * sinY;
+        state.phoneZ = state.anchorX * sinY + state.anchorZ * cosY;
+        state.phoneY = state.anchorY + Math.sin((deltaPitchDeg * Math.PI) / 180) * 0.4;
+
+        modeText.textContent = "IMU Dead-Reckoning";
+        modeDot.className = "w-2 h-2 rounded-full bg-amber-400";
+        modeBadge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-950 border border-amber-500/60 text-amber-300";
+        tSource.textContent = "IMU Telemetry";
+      } else {
+        const azRad = (state.simAzimuthDeg * Math.PI) / 180;
+        const r = state.simDistance;
+        state.phoneX = r * Math.sin(azRad);
+        state.phoneY = 0;
+        state.phoneZ = -r * Math.cos(azRad);
+
+        modeText.textContent = "Sim / Manual Slider";
+        modeDot.className = "w-2 h-2 rounded-full bg-sky-400";
+        modeBadge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-950 border border-sky-500/50 text-sky-300";
+        tSource.textContent = "Manual / Sim";
+      }
+
+      const dist = Math.hypot(state.phoneX, state.phoneY, state.phoneZ);
+      tDist.textContent = `${dist.toFixed(2)} m`;
+      tPos.textContent = `${state.phoneX.toFixed(2)}, ${state.phoneY.toFixed(2)}, ${state.phoneZ.toFixed(2)}`;
+      tYaw.textContent = `${deltaYawDeg.toFixed(1)}°`;
+
+      if (panner && audioCtx) {
+        try {
+          const t = audioCtx.currentTime;
+          if (panner.positionX) {
+            panner.positionX.setTargetAtTime(state.phoneX, t, 0.04);
+            panner.positionY.setTargetAtTime(state.phoneY, t, 0.04);
+            panner.positionZ.setTargetAtTime(state.phoneZ, t, 0.04);
+          } else if (typeof panner.setPosition === "function") {
+            panner.setPosition(state.phoneX, state.phoneY, state.phoneZ);
+          }
+        } catch (err) {
+          console.warn("Panner position update error:", err);
+        }
+      }
+
+      drawRadar();
+      updateInputMeter();
+      fusionLoopId = requestAnimationFrame(updateFusionAndRender);
+    }
+
+    function updateInputMeter() {
+      if (!analyserNode || !meterDataArray || state.sourceMode !== "linein" || !state.isPlaying) {
+        inputLevelBar.style.width = "0%";
+        inputDbLabel.textContent = "-∞ dB";
+        return;
+      }
+
+      try {
+        analyserNode.getByteTimeDomainData(meterDataArray);
+        let sumSquares = 0;
+        for (let i = 0; i < meterDataArray.length; i++) {
+          const norm = (meterDataArray[i] - 128) / 128;
+          sumSquares += norm * norm;
+        }
+        const rms = Math.sqrt(sumSquares / meterDataArray.length);
+        const db = rms > 0.00001 ? 20 * Math.log10(rms) : -100;
+        const pct = Math.min(100, Math.max(0, ((db + 60) / 60) * 100));
+
+        inputLevelBar.style.width = `${pct.toFixed(1)}%`;
+        inputDbLabel.textContent = db <= -60 ? "-∞ dB" : `${db.toFixed(1)} dB`;
+      } catch (err) {
+        console.warn("Input level meter read error:", err);
+        inputLevelBar.style.width = "0%";
+        inputDbLabel.textContent = "-∞ dB";
+      }
+    }
+
+    function drawRadar() {
+      const w = radarCanvas.width;
+      const h = radarCanvas.height;
+      const cx = w / 2;
+      const cy = h * 0.64;
+      const minDim = Math.min(w, h);
+      const scale = Math.max(28, minDim * 0.28);
+
+      radarCtx.clearRect(0, 0, w, h);
+      radarCtx.strokeStyle = "#1e293b";
+      radarCtx.lineWidth = 1.25;
+      [0.5, 1.0, 1.5, 2.0].forEach((r) => {
+        radarCtx.beginPath();
+        radarCtx.arc(cx, cy, r * scale, 0, Math.PI * 2);
+        radarCtx.stroke();
+      });
+
+      // Listener / Headphones at origin (0, 0, 0)
+      radarCtx.fillStyle = "#38bdf8";
+      radarCtx.beginPath();
+      radarCtx.arc(cx, cy, 8, 0, Math.PI * 2);
+      radarCtx.fill();
+
+      radarCtx.fillStyle = "#94a3b8";
+      radarCtx.font = "11px Inter, sans-serif";
+      radarCtx.fillText("Headphones (0,0,0)", Math.max(8, cx - 48), Math.min(h - 8, cy + 20));
+
+      // Virtual audio source ("phone soundstage")
+      const px = Math.min(w - 16, Math.max(16, cx + state.phoneX * scale));
+      const pz = Math.min(h - 16, Math.max(16, cy + state.phoneZ * scale));
+      const lineColor = state.faceVisible ? "#4ade80" : state.hasIMU ? "#fbbf24" : "#38bdf8";
+
+      radarCtx.strokeStyle = lineColor;
+      radarCtx.lineWidth = 1.75;
+      radarCtx.beginPath();
+      radarCtx.moveTo(cx, cy);
+      radarCtx.lineTo(px, pz);
+      radarCtx.stroke();
+
+      radarCtx.fillStyle = lineColor;
+      radarCtx.beginPath();
+      radarCtx.arc(px, pz, 7.5, 0, Math.PI * 2);
+      radarCtx.fill();
+
+      radarCtx.fillStyle = "#e2e8f0";
+      radarCtx.fillText("Phone Audio", Math.max(8, px - 30), Math.max(14, pz - 12));
+    }
+
+    // --- 5. Web Audio HRTF Playback & Source Routing ---
+    function initAudio() {
+      if (audioCtx && audioCtx.state !== "closed") {
+        return audioCtx;
+      }
+
+      const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextCtor) {
+        throw new Error("Web Audio API (AudioContext) is not supported in this browser.");
+      }
+
+      audioCtx = new AudioContextCtor();
+
+      const listener = audioCtx.listener;
+      if (listener) {
+        if (listener.positionX) {
+          listener.positionX.value = 0;
+          listener.positionY.value = 0;
+          listener.positionZ.value = 0;
+          listener.forwardX.value = 0;
+          listener.forwardY.value = 0;
+          listener.forwardZ.value = -1;
+          listener.upX.value = 0;
+          listener.upY.value = 1;
+          listener.upZ.value = 0;
+        } else if (typeof listener.setPosition === "function") {
+          listener.setPosition(0, 0, 0);
+          if (typeof listener.setOrientation === "function") {
+            listener.setOrientation(0, 0, -1, 0, 1, 0);
+          }
+        }
+      }
+
+      panner = audioCtx.createPanner();
+      panner.panningModel = "HRTF";
+      panner.distanceModel = "inverse";
+      panner.refDistance = 0.5;
+      panner.maxDistance = 10;
+      panner.rolloffFactor = 1.25;
+
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0.75;
+
+      panner.connect(masterGain);
+      masterGain.connect(audioCtx.destination);
+
+      return audioCtx;
+    }
+
+    async function ensureAudioRunning() {
+      const ctx = initAudio();
+      if (ctx.state === "suspended") {
+        await withTimeout(ctx.resume(), 4000, "AudioContext.resume()");
+      }
+      if (ctx.state !== "running") {
+        throw new Error(`AudioContext state is "${ctx.state}" (gesture required).`);
+      }
+      return ctx;
+    }
+
+    // --- Source Mode Switching & Input Device Enumeration ---
+    function setSourceMode(mode) {
+      state.sourceMode = mode;
+
+      const activeBtnClass = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-400 text-slate-950 transition cursor-pointer";
+      const inactiveBtnClass = "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white transition cursor-pointer";
+
+      srcSynthBtn.className = mode === "synth" ? activeBtnClass : inactiveBtnClass;
+      srcFileBtn.className = mode === "file" ? activeBtnClass : inactiveBtnClass;
+      srcLineInBtn.className = mode === "linein" ? activeBtnClass : inactiveBtnClass;
+
+      panelSynth.classList.toggle("hidden", mode !== "synth");
+      panelFile.classList.toggle("hidden", mode !== "file");
+      panelLineIn.classList.toggle("hidden", mode !== "linein");
+
+      if (mode === "linein") {
+        populateAudioInputs().catch(() => {});
+      }
+
+      if (state.isPlaying) {
+        startPlayback().catch(() => {});
+      }
+    }
+
+    srcSynthBtn.addEventListener("click", () => setSourceMode("synth"));
+    srcFileBtn.addEventListener("click", () => setSourceMode("file"));
+    srcLineInBtn.addEventListener("click", () => setSourceMode("linein"));
+
+    async function populateAudioInputs() {
+      if (!navigator.mediaDevices || typeof navigator.mediaDevices.enumerateDevices !== "function") {
+        return;
+      }
+      try {
+        const devices = await withTimeout(
+          navigator.mediaDevices.enumerateDevices(),
+          4000,
+          "enumerateDevices"
+        );
+        const audioInputs = devices.filter((d) => d.kind === "audioinput");
+        const previousVal = audioInputSelect.value || state.selectedDeviceId;
+
+        audioInputSelect.innerHTML = `<option value="">Default Audio Input (Mic / TRRS / USB)</option>`;
+        audioInputs.forEach((dev, idx) => {
+          const opt = document.createElement("option");
+          opt.value = dev.deviceId || "";
+          opt.textContent = dev.label || `Audio Input ${idx + 1}`;
+          audioInputSelect.appendChild(opt);
+        });
+
+        if (previousVal && [...audioInputSelect.options].some((o) => o.value === previousVal)) {
+          audioInputSelect.value = previousVal;
+        }
+      } catch (err) {
+        console.warn("Could not enumerate audio input devices:", err);
+      }
+    }
+
+    refreshDevicesBtn.addEventListener("click", () => {
+      populateAudioInputs().catch((err) => {
+        showStatus(formatError(err, "Device List"), "warn");
+      });
+    });
+
+    audioInputSelect.addEventListener("change", () => {
+      state.selectedDeviceId = audioInputSelect.value;
+      if (state.isPlaying && state.sourceMode === "linein") {
+        startPlayback().catch(() => {});
+      }
+    });
+
+    if (navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === "function") {
+      navigator.mediaDevices.addEventListener("devicechange", () => {
+        if (state.sourceMode === "linein") {
+          populateAudioInputs().catch(() => {});
+        }
+      });
+    }
+
+    // Load custom user audio file
+    audioFile.addEventListener("change", async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      try {
+        const ctx = initAudio();
+        fileLabel.textContent = `Decoding: ${file.name}...`;
+        showStatus(`Decoding audio file "${file.name}"...`, "info");
+        const arrayBuf = await file.arrayBuffer();
+        customBuffer = await ctx.decodeAudioData(arrayBuf);
+        fileLabel.textContent = `Loaded: ${file.name}`;
+        setSourceMode("file");
+        showStatus(`Loaded "${file.name}". Press Play Spatial Audio to listen.`, "ok");
+      } catch (err) {
+        console.error("Audio decode failed:", err);
+        customBuffer = null;
+        fileLabel.textContent = "Decode error — select another file";
+        showStatus(formatError(err, "Audio File Decode"), "error");
+      }
+    });
+
+    // Live Microphone / Line-In Capture with graceful constraint fallback -> HRTF PannerNode
+    async function startLineInInput() {
+      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
+        throw new Error("navigator.mediaDevices.getUserMedia is not available in this context.");
+      }
+
+      const baseAudio = state.selectedDeviceId
+        ? { deviceId: { exact: state.selectedDeviceId } }
+        : true;
+
+      const hiFiConstraints = {
+        audio:
+          typeof baseAudio === "object"
+            ? {
+                ...baseAudio,
+                echoCancellation: { ideal: false },
+                noiseSuppression: { ideal: false },
+                autoGainControl: { ideal: false },
+                channelCount: { ideal: 2 }
+              }
+            : {
+                echoCancellation: { ideal: false },
+                noiseSuppression: { ideal: false },
+                autoGainControl: { ideal: false },
+                channelCount: { ideal: 2 }
+              },
+        video: false
+      };
+
+      try {
+        lineInStream = await withTimeout(
+          navigator.mediaDevices.getUserMedia(hiFiConstraints),
+          7000,
+          "getUserMedia(audio hi-fi)"
+        );
+      } catch (constraintErr) {
+        // Fallback to plain { audio: ... } if specific flags or deviceId constraints are rejected
+        if (
+          constraintErr &&
+          (constraintErr.name === "OverconstrainedError" ||
+            constraintErr.name === "NotSupportedError" ||
+            constraintErr.name === "TypeError")
+        ) {
+          const fallbackAudio = state.selectedDeviceId
+            ? { deviceId: state.selectedDeviceId }
+            : true;
+          lineInStream = await withTimeout(
+            navigator.mediaDevices.getUserMedia({ audio: fallbackAudio, video: false }),
+            7000,
+            "getUserMedia(audio fallback)"
+          );
+        } else {
+          throw constraintErr;
+        }
+      }
+
+      await populateAudioInputs();
+
+      lineInSourceNode = audioCtx.createMediaStreamSource(lineInStream);
+      analyserNode = audioCtx.createAnalyser();
+      analyserNode.fftSize = 512;
+      meterDataArray = new Uint8Array(analyserNode.fftSize);
+
+      lineInSourceNode.connect(analyserNode);
+      lineInSourceNode.connect(panner);
+    }
+
+    // Warm Synth Chord Loop (Fmaj7 -> Cmaj7 arpeggiated pad)
+    function startWarmSynthLoop() {
+      const chords = [
+        [174.61, 220.0, 261.63, 329.63], // Fmaj7
+        [130.81, 196.0, 246.94, 329.63]  // Cmaj7
+      ];
+      let step = 0;
+
+      const triggerChordNote = () => {
+        if (!audioCtx || audioCtx.state !== "running" || !panner) return;
+        const now = audioCtx.currentTime;
+        const chord = chords[Math.floor(step / 4) % chords.length];
+        const freq = chord[step % chord.length];
+
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        const filter = audioCtx.createBiquadFilter();
+        const env = audioCtx.createGain();
+
+        osc1.type = "triangle";
+        osc2.type = "sine";
+        osc1.frequency.setValueAtTime(freq, now);
+        osc2.frequency.setValueAtTime(freq * 1.003, now);
+
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(1100, now);
+
+        env.gain.setValueAtTime(0.0001, now);
+        env.gain.exponentialRampToValueAtTime(0.22, now + 0.05);
+        env.gain.exponentialRampToValueAtTime(0.0001, now + 0.65);
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(env);
+        env.connect(panner);
+
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + 0.7);
+        osc2.stop(now + 0.7);
+        step++;
+      };
+
+      triggerChordNote();
+      synthTimer = setInterval(triggerChordNote, 420);
+    }
+
+    function cleanupActiveSources() {
+      if (synthTimer) {
+        clearInterval(synthTimer);
+        synthTimer = null;
+      }
+      if (sourceNode) {
+        try { sourceNode.stop(); } catch (_) {}
+        try { sourceNode.disconnect(); } catch (_) {}
+        sourceNode = null;
+      }
+      if (lineInSourceNode) {
+        try { lineInSourceNode.disconnect(); } catch (_) {}
+        lineInSourceNode = null;
+      }
+      if (analyserNode) {
+        try { analyserNode.disconnect(); } catch (_) {}
+        analyserNode = null;
+      }
+      if (lineInStream) {
+        try {
+          lineInStream.getTracks().forEach((track) => track.stop());
+        } catch (_) {}
+        lineInStream = null;
+      }
+      meterDataArray = null;
+      inputLevelBar.style.width = "0%";
+      inputDbLabel.textContent = "-∞ dB";
+    }
+
+    async function startPlayback() {
+      showStatus("", "info");
+      try {
+        await ensureAudioRunning();
+        cleanupActiveSources();
+
+        if (state.sourceMode === "linein") {
+          await startLineInInput();
+          showStatus("Mic / Line-In active through 3D HRTF panner. Use sliders or phone motion to position sound.", "ok");
+        } else if (state.sourceMode === "file") {
+          if (!customBuffer) {
+            state.isPlaying = false;
+            playBtn.disabled = false;
+            stopBtn.disabled = true;
+            showStatus("No audio file loaded. Choose a file under Audio File, or click Quick Test / Synth.", "warn");
+            return;
+          }
+          sourceNode = audioCtx.createBufferSource();
+          sourceNode.buffer = customBuffer;
+          sourceNode.loop = true;
+          sourceNode.connect(panner);
+          sourceNode.start();
+          showStatus("Playing spatialized audio file through HRTF panner.", "ok");
+        } else {
+          startWarmSynthLoop();
+          showStatus("Playing 3D spatial synth loop. Drag Azimuth/Distance sliders to hear HRTF positioning.", "ok");
+        }
+
+        state.isPlaying = true;
+        playBtn.disabled = true;
+        stopBtn.disabled = false;
+      } catch (err) {
+        console.error("Playback start error:", err);
+        cleanupActiveSources();
+        state.isPlaying = false;
+        playBtn.disabled = false;
+        stopBtn.disabled = true;
+        showStatus(formatError(err, "Audio Playback"), "error");
+      }
+    }
+
+    function stopPlayback() {
+      cleanupActiveSources();
+      state.isPlaying = false;
+      playBtn.disabled = false;
+      stopBtn.disabled = true;
+      showStatus("Audio stopped.", "info");
+    }
+
+    playBtn.addEventListener("click", () => {
+      startPlayback();
+    });
+
+    quickTestBtn.addEventListener("click", () => {
+      if (state.sourceMode !== "synth") {
+        setSourceMode("synth");
+      }
+      if (Math.abs(state.simAzimuthDeg) < 15) {
+        state.simAzimuthDeg = 45;
+        simAzSlider.value = "45";
+        simAzVal.textContent = "45°";
+      }
+      startPlayback();
+    });
+
+    stopBtn.addEventListener("click", stopPlayback);
+
+    window.addEventListener("beforeunload", () => {
+      stopPlayback();
+      stopCameraStream();
+      if (fusionLoopId) {
+        cancelAnimationFrame(fusionLoopId);
+        fusionLoopId = null;
+      }
+    });
+
+    // Start spatial fusion & radar loop immediately so desktop/slider/synth works with zero permissions
+    fusionLoopId = requestAnimationFrame(updateFusionAndRender);
+  </script>
+</body>
+</html>
